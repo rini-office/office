@@ -8,6 +8,14 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith('/favicon');
 }
 
+function isCronRequest(pathname: string, request: NextRequest): boolean {
+  if (!pathname.startsWith('/api/cron')) return false;
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const authHeader = request.headers.get('Authorization');
+  return authHeader === `Bearer ${cronSecret}`;
+}
+
 function bytesToHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -44,7 +52,7 @@ async function verifyToken(token: string): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPath(pathname) || isCronRequest(pathname, request)) {
     return NextResponse.next();
   }
 
