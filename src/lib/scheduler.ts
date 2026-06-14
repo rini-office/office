@@ -1,5 +1,6 @@
 import { runPipeline } from './pipeline';
 import { getConfig, setConfig } from './db';
+import { getNextCronTime, describeCron } from './cron';
 
 let isRunning = false;
 const isVercel = !!process.env.VERCEL;
@@ -54,12 +55,26 @@ export async function getSchedulerStatus(): Promise<{
   pipelineRunning: boolean;
   lastRun: string | undefined;
   lastRunStatus: string | undefined;
+  nextRun: string | undefined;
+  scheduleDescription: string;
 }> {
+  const cronExpression = await getConfig('schedule_cron') || '0 8 * * *';
+  const timezone = await getConfig('schedule_timezone') || 'Asia/Jakarta';
+
+  let nextRun: string | undefined;
+  try {
+    nextRun = getNextCronTime(cronExpression, new Date(), timezone).toISOString();
+  } catch {
+    nextRun = undefined;
+  }
+
   return {
-    running: true, // Always "ready" — actual schedule is managed by Vercel Cron Jobs
-    cronExpression: await getConfig('schedule_cron') || '0 8 * * *',
+    running: true,
+    cronExpression,
     pipelineRunning: isRunning,
     lastRun: await getConfig('last_run'),
     lastRunStatus: await getConfig('last_run_status'),
+    nextRun,
+    scheduleDescription: describeCron(cronExpression),
   };
 }

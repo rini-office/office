@@ -18,11 +18,34 @@ interface SchedulerInfo {
   pipelineRunning: boolean;
   lastRun: string;
   lastRunStatus: string;
+  nextRun?: string;
+  scheduleDescription?: string;
+}
+
+function formatCountdown(targetIso: string): string {
+  const target = new Date(targetIso).getTime();
+  const now = Date.now();
+  const diff = target - now;
+
+  if (diff <= 0) return 'running...';
+
+  const hours = Math.floor(diff / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({ total: 0, completed: 0, failed: 0, processing_image: 0, processing_video: 0 });
   const [scheduler, setScheduler] = useState<SchedulerInfo | null>(null);
+  const [countdown, setCountdown] = useState('');
   const [pipelineStatus, setPipelineStatus] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
@@ -44,6 +67,18 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
+  // Live countdown every second
+  useEffect(() => {
+    if (!scheduler?.nextRun) {
+      setCountdown('');
+      return;
+    }
+    const tick = () => setCountdown(formatCountdown(scheduler.nextRun!));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [scheduler?.nextRun]);
+
   const handleTrigger = async () => {
     setTriggering(true);
     setPipelineStatus('Starting pipeline...');
@@ -62,20 +97,6 @@ export default function Dashboard() {
       setPipelineStatus('Failed to trigger pipeline');
     } finally {
       setTriggering(false);
-    }
-  };
-
-  const handleSchedulerToggle = async () => {
-    try {
-      const action = scheduler?.running ? 'stop_scheduler' : 'start_scheduler';
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      fetchStatus();
-    } catch (err) {
-      console.error('Failed to toggle scheduler:', err);
     }
   };
 
@@ -166,19 +187,18 @@ export default function Dashboard() {
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
                     Pipeline Control
                   </h2>
-                  <div className="flex items-center gap-4 text-sm text-zinc-500">
+                  <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
                     <span>
                       Schedule:{' '}
                       <code className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-xs font-mono">
                         {scheduler?.cronExpression || 'Not configured'}
                       </code>
                     </span>
-                    <span>
-                      Scheduler:{' '}
-                      <span className={scheduler?.running ? 'text-emerald-600' : 'text-zinc-400'}>
-                        {scheduler?.running ? 'Running' : 'Stopped'}
+                    {scheduler?.scheduleDescription && (
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        {scheduler.scheduleDescription}
                       </span>
-                    </span>
+                    )}
                     <span>
                       Last run:{' '}
                       {formatTime(scheduler?.lastRun)}
@@ -186,16 +206,6 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSchedulerToggle}
-                    className={`px-3 py-2 text-sm rounded-lg transition-colors ${
-                      scheduler?.running
-                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
-                        : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                    }`}
-                  >
-                    {scheduler?.running ? 'Stop Scheduler' : 'Start Scheduler'}
-                  </button>
                   <button
                     onClick={handleTrigger}
                     disabled={triggering}
@@ -221,6 +231,22 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Countdown to next cron run */}
+              {scheduler?.nextRun && (
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Next auto-run:{' '}
+                    <span className="font-semibold">
+                      {new Date(scheduler.nextRun).toLocaleString()}
+                    </span>
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1 tabular-nums tracking-tight">
+                    {countdown}
+                  </p>
+                </div>
+              )}
+
               {pipelineStatus && (
                 <div className={`mt-4 p-3 rounded-lg text-sm ${
                   pipelineStatus.includes('Error')
