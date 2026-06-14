@@ -241,6 +241,10 @@ const ENV_FALLBACKS: Record<string, string | undefined> = {
   kie_api_key: process.env.KIE_API_KEY,
   google_client_id: process.env.GOOGLE_CLIENT_ID,
   google_client_secret: process.env.GOOGLE_CLIENT_SECRET,
+  telegram_image_bot_token: process.env.TELEGRAM_IMAGE_BOT_TOKEN,
+  telegram_image_chat_id: process.env.TELEGRAM_IMAGE_CHAT_ID,
+  telegram_video_bot_token: process.env.TELEGRAM_VIDEO_BOT_TOKEN,
+  telegram_video_chat_id: process.env.TELEGRAM_VIDEO_CHAT_ID,
 };
 
 export async function getConfig(key: string): Promise<string | undefined> {

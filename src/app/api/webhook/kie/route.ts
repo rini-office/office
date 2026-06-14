@@ -4,6 +4,7 @@ import { downloadVideo, downloadImage, verifyWebhookSignature } from '@/lib/kie'
 import { uploadFile, getFileUrl } from '@/lib/drive';
 import { getConfig, getDb } from '@/lib/db';
 import { createImageToVideoTask } from '@/lib/kie';
+import { sendImageToTelegram, sendVideoToTelegram } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -119,6 +120,9 @@ async function handleImageCompletion(
     const uploadedImageId = await uploadFile(imageOutputFolderId, job.source_file_name, imageBuffer, 'image/png');
     console.log(`[Webhook] Image uploaded to Drive: ${job.source_file_name} (${uploadedImageId})`);
 
+    // Send to Telegram image bot (fire-and-forget — failure does not block pipeline)
+    sendImageToTelegram(imageBuffer, job.source_file_name, `Enhanced: ${job.source_file_name}`).catch(() => {});
+
     await updateJob(job.id, { image_output_file_id: uploadedImageId, source_file_id: uploadedImageId });
 
     // Mark source file as processed so it won't be re-processed on next run
@@ -200,6 +204,9 @@ async function finalizeVideo(
       const videoBuffer = await downloadVideo(videoUrl);
       const videoName = job.source_file_name.replace(/\.[^.]+$/, '') + '_video.mp4';
       const uploadedFileId = await uploadFile(destFolderId, videoName, videoBuffer, 'video/mp4');
+
+      // Send to Telegram video bot (fire-and-forget — failure does not block pipeline)
+      sendVideoToTelegram(videoBuffer, videoName, `Video: ${videoName}`).catch(() => {});
       await updateJob(job.id, {
         output_file_id: uploadedFileId,
         completed_at: new Date().toISOString(),

@@ -12,6 +12,7 @@ import {
   enhanceImage,
 } from './kie';
 import { createJob, updateJob, getJob, isFileProcessed, markFileProcessed, getConfig } from './db';
+import { sendImageToTelegram, sendVideoToTelegram } from './telegram';
 
 const isVercel = !!process.env.VERCEL;
 
@@ -327,6 +328,9 @@ export async function retryJobVideo(jobId: string): Promise<{ success: boolean; 
     const videoName = job.source_file_name.replace(/\.[^.]+$/, '') + '_video.mp4';
     const uploadedVideoId = await uploadFile(videoOutputFolderId, videoName, videoBuffer, 'video/mp4');
 
+    // Send to Telegram video bot (fire-and-forget)
+    sendVideoToTelegram(videoBuffer, videoName, `Video: ${videoName}`).catch(() => {});
+
     await updateJob(jobId, {
       status: 'completed',
       output_url: videoUrl,
@@ -381,6 +385,9 @@ export async function syncJob(jobId: string): Promise<{ success: boolean; status
       const imageOutputFolderId = await getConfig('drive_image_output_folder') || await getConfig('drive_source_folder') || '';
       const uploadedImageId = await uploadFile(imageOutputFolderId, job.source_file_name, imageBuffer, 'image/png');
       console.log(`[Sync] Image uploaded: ${uploadedImageId}`);
+
+      // Send to Telegram image bot (fire-and-forget)
+      sendImageToTelegram(imageBuffer, job.source_file_name, `Enhanced: ${job.source_file_name}`).catch(() => {});
 
       await updateJob(jobId, { image_output_file_id: uploadedImageId, source_file_id: uploadedImageId });
       await markFileProcessed(job.source_file_id);
@@ -442,6 +449,9 @@ export async function syncJob(jobId: string): Promise<{ success: boolean; status
       const videoOutputFolderId = await getConfig('drive_dest_folder') || '';
       const videoName = job.source_file_name.replace(/\.[^.]+$/, '') + '_video.mp4';
       const uploadedVideoId = await uploadFile(videoOutputFolderId, videoName, videoBuffer, 'video/mp4');
+
+      // Send to Telegram video bot (fire-and-forget)
+      sendVideoToTelegram(videoBuffer, videoName, `Video: ${videoName}`).catch(() => {});
 
       await updateJob(jobId, {
         status: 'completed',

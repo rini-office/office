@@ -38,6 +38,10 @@ export async function GET() {
         schedule_timezone: config.schedule_timezone || 'Asia/Jakarta',
         google_client_id: config.google_client_id || '',
         google_client_secret: config.google_client_secret ? '••••••••' : '',
+        telegram_image_bot_token: config.telegram_image_bot_token ? '••••••••' : '',
+        telegram_image_chat_id: config.telegram_image_chat_id || '',
+        telegram_video_bot_token: config.telegram_video_bot_token ? '••••••••' : '',
+        telegram_video_chat_id: config.telegram_video_chat_id || '',
       },
       driveReady,
       folders,
@@ -72,6 +76,10 @@ export async function POST(request: NextRequest) {
       'default_duration',
       'schedule_cron',
       'schedule_timezone',
+      'telegram_image_bot_token',
+      'telegram_image_chat_id',
+      'telegram_video_bot_token',
+      'telegram_video_chat_id',
     ];
 
     for (const field of fields) {

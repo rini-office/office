@@ -36,6 +36,10 @@ export default function ConfigPanel() {
     default_duration: '10',
     schedule_cron: '0 8 * * *',
     schedule_timezone: 'Asia/Jakarta',
+    telegram_image_bot_token: '',
+    telegram_image_chat_id: '',
+    telegram_video_bot_token: '',
+    telegram_video_chat_id: '',
   });
 
   const fetchConfig = useCallback(async () => {
@@ -328,6 +332,40 @@ export default function ConfigPanel() {
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Duration (6-30 seconds)</label>
           <input type="number" min="6" max="30" step="1" value={form.default_duration} onChange={(e) => updateField('default_duration', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+        </div>
+      </div>
+
+      {/* Telegram Output */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Telegram Output</h3>
+        <p className="text-xs text-zinc-400">
+          Send output images and videos to Telegram via two separate bots. Get bot tokens from{' '}
+          <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">@BotFather</a>.
+        </p>
+
+        <div className="border border-orange-200 dark:border-orange-800 rounded-lg p-4 space-y-3 bg-orange-50/50 dark:bg-orange-900/10">
+          <h4 className="text-sm font-medium text-orange-700 dark:text-orange-300">Image Bot</h4>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Bot Token</label>
+            <input type="password" value={form.telegram_image_bot_token} onChange={(e) => updateField('telegram_image_bot_token', e.target.value)} placeholder="123456:ABC-DEF..." className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Chat ID</label>
+            <input type="text" value={form.telegram_image_chat_id} onChange={(e) => updateField('telegram_image_chat_id', e.target.value)} placeholder="-100123456789 or @channelusername" className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+            <p className="text-xs text-zinc-400 mt-1">Channel/group ID (e.g. -100xxx) or public username (e.g. @mygroup).</p>
+          </div>
+        </div>
+
+        <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-3 bg-blue-50/50 dark:bg-blue-900/10">
+          <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300">Video Bot</h4>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Bot Token</label>
+            <input type="password" value={form.telegram_video_bot_token} onChange={(e) => updateField('telegram_video_bot_token', e.target.value)} placeholder="123456:ABC-DEF..." className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Chat ID</label>
+            <input type="text" value={form.telegram_video_chat_id} onChange={(e) => updateField('telegram_video_chat_id', e.target.value)} placeholder="-100123456789 or @channelusername" className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
         </div>
       </div>
 
