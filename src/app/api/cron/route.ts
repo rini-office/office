@@ -16,11 +16,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const schedulerRunning = await getConfig('scheduler_running');
-    if (schedulerRunning === 'false') {
-      return NextResponse.json({ skipped: true, reason: 'scheduler stopped' });
-    }
-
     const cronExpression = await getConfig('schedule_cron') || '0 8 * * *';
     const timezone = await getConfig('schedule_timezone') || 'Asia/Jakarta';
     const lastRun = await getConfig('last_run');
