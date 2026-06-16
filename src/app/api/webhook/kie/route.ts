@@ -120,10 +120,13 @@ async function handleImageCompletion(
     const uploadedImageId = await uploadFile(imageOutputFolderId, job.source_file_name, imageBuffer, 'image/png');
     console.log(`[Webhook] Image uploaded to Drive: ${job.source_file_name} (${uploadedImageId})`);
 
-    // Send to Telegram image bot (fire-and-forget — failure logged but does not block pipeline)
-    sendImageToTelegram(imageBuffer, job.source_file_name, `Enhanced: ${job.source_file_name}`)
-      .then(ok => { if (!ok) console.warn(`[Webhook] Telegram image send failed for ${job.source_file_name}`); })
-      .catch(err => console.error(`[Webhook] Telegram image send error:`, err));
+    // Send to Telegram image bot (awaited — Vercel serverless kills fire-and-forget promises on response)
+    try {
+      const sent = await sendImageToTelegram(imageBuffer, job.source_file_name, `Enhanced: ${job.source_file_name}`);
+      if (!sent) console.warn(`[Webhook] Telegram image send failed for ${job.source_file_name}`);
+    } catch (err) {
+      console.error(`[Webhook] Telegram image send error:`, err);
+    }
 
     await updateJob(job.id, { image_output_file_id: uploadedImageId, source_file_id: uploadedImageId });
 
@@ -207,10 +210,13 @@ async function finalizeVideo(
       const videoName = job.source_file_name.replace(/\.[^.]+$/, '') + '_video.mp4';
       const uploadedFileId = await uploadFile(destFolderId, videoName, videoBuffer, 'video/mp4');
 
-      // Send to Telegram video bot (fire-and-forget — failure logged but does not block pipeline)
-      sendVideoToTelegram(videoBuffer, videoName, `Video: ${videoName}`)
-        .then(ok => { if (!ok) console.warn(`[Webhook] Telegram video send failed for ${videoName}`); })
-        .catch(err => console.error(`[Webhook] Telegram video send error:`, err));
+      // Send to Telegram video bot (awaited — Vercel serverless kills fire-and-forget promises on response)
+      try {
+        const sent = await sendVideoToTelegram(videoBuffer, videoName, `Video: ${videoName}`);
+        if (!sent) console.warn(`[Webhook] Telegram video send failed for ${videoName}`);
+      } catch (err) {
+        console.error(`[Webhook] Telegram video send error:`, err);
+      }
       await updateJob(job.id, {
         output_file_id: uploadedFileId,
         completed_at: new Date().toISOString(),
