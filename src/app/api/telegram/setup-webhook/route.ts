@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 
 /**
  * GET  — show current webhook status
- * POST — register webhook with Telegram
+ * POST — register webhook with Telegram  
  * DELETE — remove webhook
  */
 export async function GET() {
@@ -21,22 +21,15 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    // Optional: protect with same secret as cron
-    const authHeader = request.headers.get('Authorization');
-    const secret = process.env.CRON_SECRET;
-    if (secret && authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const webhookUrl = `${appUrl}/api/webhook/telegram`;
     const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 
     if (appUrl.includes('localhost')) {
       return NextResponse.json({
-        error: 'Cannot register webhook on localhost. Deploy to Vercel first, then call this endpoint on the production URL.',
+        error: 'Cannot register webhook on localhost. Deploy to Vercel first.',
       }, { status: 400 });
     }
 
@@ -59,16 +52,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const secret = process.env.CRON_SECRET;
-    if (secret && authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const success = await deleteTelegramWebhook();
-    return NextResponse.json({ success, message: success ? 'Webhook removed' : 'Failed to remove webhook' });
+    return NextResponse.json({
+      success,
+      message: success ? 'Webhook removed' : 'Failed to remove webhook',
+    });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
