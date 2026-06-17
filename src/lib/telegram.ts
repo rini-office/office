@@ -248,6 +248,47 @@ export async function answerCallbackQuery(
   }
 }
 
+// ── File download from Telegram ───────────────────────────────────────────
+
+export async function downloadTelegramFile(
+  fileId: string,
+  botTokenKey = 'telegram_input_bot_token',
+): Promise<{ buffer: Buffer; fileName: string } | null> {
+  const token = await getConfig(botTokenKey);
+  if (!token) return null;
+
+  try {
+    const getFileUrl = `${TELEGRAM_API_BASE}/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`;
+    const fileRes = await fetch(getFileUrl);
+    const fileData = await fileRes.json() as {
+      ok: boolean;
+      result?: { file_path?: string };
+    };
+
+    if (!fileData.ok || !fileData.result?.file_path) {
+      console.error('[Telegram] getFile failed:', fileData);
+      return null;
+    }
+
+    const downloadUrl = `${TELEGRAM_API_BASE}/file/bot${token}/${fileData.result.file_path}`;
+    const downloadRes = await fetch(downloadUrl);
+    if (!downloadRes.ok) {
+      console.error('[Telegram] File download failed:', downloadRes.status);
+      return null;
+    }
+
+    const arrayBuffer = await downloadRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const fileName = fileData.result.file_path.split('/').pop() || 'photo.jpg';
+
+    console.log(`[Telegram] Downloaded file: ${fileName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    return { buffer, fileName };
+  } catch (err) {
+    console.error('[Telegram] downloadTelegramFile error:', err);
+    return null;
+  }
+}
+
 /**
  * Registers a webhook URL with the Telegram Bot API so Telegram
  * sends message updates to our endpoint.
@@ -258,10 +299,12 @@ export async function answerCallbackQuery(
 export async function setTelegramWebhook(
   webhookUrl: string,
   secretToken: string,
+  botTokenKey = 'telegram_image_bot_token',
+  allowedUpdates: string[] = ['callback_query'],
 ): Promise<boolean> {
-  const token = await getConfig('telegram_image_bot_token');
+  const token = await getConfig(botTokenKey);
   if (!token) {
-    console.warn('[Telegram] Cannot set webhook — image bot token not configured');
+    console.warn(`[Telegram] Cannot set webhook — ${botTokenKey} not configured`);
     return false;
   }
 
@@ -274,7 +317,7 @@ export async function setTelegramWebhook(
       body: JSON.stringify({
         url: webhookUrl,
         secret_token: secretToken,
-        allowed_updates: ['callback_query'],
+        allowed_updates: allowedUpdates,
       }),
     });
     const result: TelegramResult = await response.json();
@@ -295,8 +338,10 @@ export async function setTelegramWebhook(
 /**
  * Removes the Telegram bot webhook and switches back to getUpdates mode.
  */
-export async function deleteTelegramWebhook(): Promise<boolean> {
-  const token = await getConfig('telegram_image_bot_token');
+export async function deleteTelegramWebhook(
+  botTokenKey = 'telegram_image_bot_token',
+): Promise<boolean> {
+  const token = await getConfig(botTokenKey);
   if (!token) return false;
 
   const url = `${TELEGRAM_API_BASE}/bot${token}/deleteWebhook`;
@@ -312,8 +357,10 @@ export async function deleteTelegramWebhook(): Promise<boolean> {
 /**
  * Returns the current webhook info for the image bot.
  */
-export async function getTelegramWebhookInfo(): Promise<Record<string, unknown> | null> {
-  const token = await getConfig('telegram_image_bot_token');
+export async function getTelegramWebhookInfo(
+  botTokenKey = 'telegram_image_bot_token',
+): Promise<Record<string, unknown> | null> {
+  const token = await getConfig(botTokenKey);
   if (!token) return null;
 
   const url = `${TELEGRAM_API_BASE}/bot${token}/getWebhookInfo`;
