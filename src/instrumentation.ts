@@ -1,11 +1,4 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    const { startScheduler } = await import('@/lib/scheduler');
-    const { getConfig } = await import('@/lib/db');
-
-    const wasRunning = await getConfig('scheduler_running');
-    if (wasRunning !== 'false') {
-      await startScheduler();
-    }
-  }
+  // No-op — pipeline triggered by Telegram input webhook, no scheduler needed.
+  console.log('[Instrumentation] App started — pipeline triggered via Telegram webhook');
 }

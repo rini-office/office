@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConfig } from '@/lib/db';
 import { uploadFile } from '@/lib/drive';
-import { downloadTelegramFile } from '@/lib/telegram';
+import { downloadTelegramFile, sendTextToInputChat } from '@/lib/telegram';
 import { executePipeline } from '@/lib/scheduler';
 
 export const runtime = 'nodejs';
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     const downloaded = await downloadTelegramFile(fileId, 'telegram_input_bot_token');
     if (!downloaded) {
       console.error('[TelegramInput] Failed to download file');
+      await sendTextToInputChat('❌ Gagal mendownload gambar.').catch(() => {});
       return NextResponse.json({ ok: false, error: 'download failed' }, { status: 500 });
     }
 
@@ -80,11 +81,15 @@ export async function POST(request: NextRequest) {
     const inputFolderId = await getConfig('drive_input_folder');
     if (!inputFolderId) {
       console.error('[TelegramInput] drive_input_folder not configured');
+      await sendTextToInputChat('❌ Input folder belum dikonfigurasi.').catch(() => {});
       return NextResponse.json({ ok: false, error: 'input folder not configured' }, { status: 500 });
     }
 
     const uploadedId = await uploadFile(inputFolderId, fileName!, downloaded.buffer, 'image/jpeg');
     console.log(`[TelegramInput] Uploaded to Drive: ${fileName} (${uploadedId})`);
+
+    // Feedback: image received
+    await sendTextToInputChat(`✅ Gambar diterima: ${fileName}\n⏳ Memproses...`).catch(() => {});
 
     // Trigger pipeline immediately
     try {
@@ -92,6 +97,7 @@ export async function POST(request: NextRequest) {
       console.log('[TelegramInput] Pipeline triggered');
     } catch (err) {
       console.error('[TelegramInput] Pipeline trigger error (file uploaded, pipeline will retry):', err);
+      await sendTextToInputChat('⚠️ Pipeline trigger error, akan dicoba di cron berikutnya.').catch(() => {});
     }
 
     return NextResponse.json({ ok: true, fileId: uploadedId, fileName });

@@ -206,7 +206,25 @@ export interface ImageToImageParams {
 
 async function buildImageToImageRequestBody(params: ImageToImageParams): Promise<Record<string, unknown>> {
   const model = params.model || await getConfig('kie_image_model') || 'nano-banana-2';
+  const isGpt = model === 'gpt-image-2-image-to-image';
 
+  if (isGpt) {
+    // GPT Image 2: uses input_urls, hardcoded 1K / 9:16 per user request
+    const input: Record<string, unknown> = {
+      prompt: params.prompt || await getConfig('default_image_to_image_prompt') || 'Enhance this image, improve quality, add cinematic lighting and detail',
+      input_urls: [params.imageUrl],
+      resolution: '1K',
+      aspect_ratio: '9:16',
+    };
+
+    const body: Record<string, unknown> = { model, input };
+    if (params.callBackUrl) {
+      body.callBackUrl = params.callBackUrl;
+    }
+    return body;
+  }
+
+  // nano-banana-2 and other models: uses image_input, config-driven params
   const input: Record<string, unknown> = {
     prompt: params.prompt || await getConfig('default_image_to_image_prompt') || 'Enhance this image, improve quality, add cinematic lighting and detail',
     image_input: [params.imageUrl],

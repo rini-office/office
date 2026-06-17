@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJob, getRecentJobs, getJobStats } from '@/lib/db';
-import { getSchedulerStatus } from '@/lib/scheduler';
+import { getJob, getRecentJobs, getJobStats, getConfig } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -19,9 +18,10 @@ export async function GET(request: NextRequest) {
 
     const jobs = await getRecentJobs(20);
     const stats = await getJobStats();
-    const scheduler = await getSchedulerStatus();
+    const lastRun = await getConfig('last_run');
+    const lastRunStatus = await getConfig('last_run_status');
 
-    return NextResponse.json({ jobs, stats, scheduler });
+    return NextResponse.json({ jobs, stats, lastRun, lastRunStatus });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });

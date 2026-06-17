@@ -8,7 +8,6 @@ import {
   createImageToVideoTask,
   checkTaskStatus,
   downloadVideo,
-  generateImage,
   enhanceImage,
 } from './kie';
 import { createJob, updateJob, getJob, isFileProcessed, markFileProcessed, getConfig } from './db';
@@ -37,11 +36,6 @@ export async function runPipeline(
   imageOutputFolderId: string,
   videoOutputFolderId: string
 ): Promise<PipelineResult> {
-  const pipelineMode = await getConfig('pipeline_mode') || 'image-to-image';
-
-  if (pipelineMode === 'text-to-image') {
-    return runTextToImagePipeline(imageOutputFolderId, videoOutputFolderId);
-  }
   return runImageToImagePipeline(inputFolderId, imageOutputFolderId, videoOutputFolderId);
 }
 
@@ -66,6 +60,7 @@ async function runImageToImagePipeline(
   console.log(`[Pipeline] Found ${images.length} images in input folder`);
 
   const enhancePrompt = await getConfig('default_image_to_image_prompt') || 'Enhance this image, improve quality, add cinematic lighting';
+  const imageModel = await getConfig('image_model') || 'nano-banana-2';
   const imageAspectRatio = await getConfig('image_aspect_ratio') || 'auto';
   const imageResolution = await getConfig('image_resolution') || '1K';
   const imageOutputFormat = await getConfig('image_output_format') || 'jpg';
@@ -110,7 +105,7 @@ async function runImageToImagePipeline(
       const imageTaskId = await enhanceImage({
         imageUrl,
         prompt: enhancePrompt,
-        model: 'nano-banana-2',
+        model: imageModel,
         aspectRatio: imageAspectRatio,
         resolution: imageResolution,
         outputFormat: imageOutputFormat,
@@ -156,107 +151,6 @@ async function runImageToImagePipeline(
 
   result.success = result.failed === 0;
   console.log(`[Pipeline] Image-to-Image done - ${result.processed} submitted, ${result.failed} failed`);
-  return result;
-}
-
-// ── Text-to-Image Pipeline (async — submit only, webhook handles rest) ──────
-
-async function runTextToImagePipeline(
-  imageOutputFolderId: string,
-  _videoOutputFolderId: string
-): Promise<PipelineResult> {
-  const result: PipelineResult = {
-    success: true,
-    processed: 0,
-    failed: 0,
-    errors: [],
-    jobIds: [],
-  };
-
-  console.log(`[Pipeline] Text-to-Image (async) - image out: ${imageOutputFolderId}`);
-
-  const imagePrompt = await getConfig('default_image_prompt') || 'A beautiful cinematic scene, high quality, photorealistic';
-  const imageCount = parseInt(await getConfig('image_count') || '1', 10);
-  const imageResolution = await getConfig('text_image_resolution') || '1024x1024';
-  const defaultDuration = parseInt(await getConfig('default_duration') || '10', 10);
-  const callbackUrl = getCallbackUrl();
-
-  const variantSuffixes = ['', 'variant B', 'variant C', 'variant D', 'variant E'];
-
-  for (let i = 0; i < imageCount; i++) {
-    const variantSuffix = i < variantSuffixes.length ? ` (${variantSuffixes[i]})` : ` (variant ${i + 1})`;
-    const prompt = imagePrompt + variantSuffix;
-    const jobId = uuidv4();
-    const imageName = `generated_image_${Date.now()}_${i + 1}.png`;
-
-    console.log(`[Pipeline] Submitting image ${i + 1}/${imageCount}: "${prompt.substring(0, 80)}..."`);
-
-    try {
-      await createJob({
-        id: jobId,
-        source_file_name: imageName,
-        source_file_id: '',
-        status: 'processing_image',
-        kie_task_id: null,
-        output_url: null,
-        output_file_id: null,
-        image_prompt: prompt,
-        image_output_file_id: null,
-        image_gen_task_id: null,
-        duration: defaultDuration,
-        resolution: 'grok-imagine/image-to-video',
-        error: null,
-      });
-
-      result.jobIds.push(jobId);
-
-      const imageTaskId = await generateImage({
-        prompt,
-        model: 'grok-imagine/text-to-image',
-        count: 1,
-        resolution: imageResolution,
-        callBackUrl: callbackUrl,
-      });
-
-      await updateJob(jobId, { image_gen_task_id: imageTaskId });
-      result.processed++;
-      console.log(`[Pipeline] Image task submitted: ${imageTaskId} (job ${jobId})`);
-
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Pipeline] Failed submitting ${i + 1}/${imageCount}: ${errorMsg}`);
-
-      if (!(await getJob(jobId))) {
-        try {
-          await createJob({
-            id: jobId,
-            source_file_name: imageName,
-            source_file_id: '',
-            status: 'failed',
-            kie_task_id: null,
-            output_url: null,
-            output_file_id: null,
-            image_prompt: prompt,
-            image_output_file_id: null,
-            image_gen_task_id: null,
-            duration: defaultDuration,
-            resolution: 'grok-imagine/image-to-video',
-            error: errorMsg,
-          });
-        } catch { /* ignore */ }
-      }
-
-      try {
-        await updateJob(jobId, { status: 'failed', error: errorMsg, completed_at: new Date().toISOString() });
-      } catch { /* ignore */ }
-
-      result.failed++;
-      result.errors.push(`${imageName}: ${errorMsg}`);
-    }
-  }
-
-  result.success = result.failed === 0;
-  console.log(`[Pipeline] Text-to-Image done - ${result.processed} submitted, ${result.failed} failed`);
   return result;
 }
 

@@ -1,80 +1,30 @@
 import { runPipeline } from './pipeline';
 import { getConfig, setConfig } from './db';
-import { getNextCronTime, describeCron } from './cron';
 
-let isRunning = false;
-const isVercel = !!process.env.VERCEL;
-
-export async function startScheduler(): Promise<void> {
-  if (isVercel) {
-    console.log('[Scheduler] Running on Vercel — use Vercel Cron Jobs (see /api/cron)');
-  } else {
-    console.log('[Scheduler] Local dev — trigger pipeline via /api/cron or /api/pipeline/trigger');
-  }
-}
-
+/**
+ * Runs the full pipeline: scans input folder, processes images, generates videos.
+ * Triggered by Telegram input webhook (replaces old cron scheduler).
+ */
 export async function executePipeline(): Promise<void> {
-  console.log(`[Scheduler] Triggering pipeline at ${new Date().toISOString()}`);
+  console.log(`[Pipeline] Triggered at ${new Date().toISOString()}`);
 
   const inputFolderId = await getConfig('drive_input_folder') || await getConfig('drive_source_folder');
   const imageOutputFolderId = await getConfig('drive_image_output_folder') || await getConfig('drive_source_folder');
   const videoOutputFolderId = await getConfig('drive_dest_folder');
 
   if (!imageOutputFolderId || !videoOutputFolderId) {
-    console.error('[Scheduler] Image output or video output folder not configured');
+    console.error('[Pipeline] Image output or video output folder not configured');
     return;
   }
 
   try {
-    isRunning = true;
     await setConfig('last_run', new Date().toISOString());
     const result = await runPipeline(inputFolderId || '', imageOutputFolderId, videoOutputFolderId);
     await setConfig('last_run_status', result.success ? 'completed' : 'failed');
-    await setConfig('last_run_summary', JSON.stringify(result));
-    console.log(`[Scheduler] Pipeline completed: ${result.processed} processed, ${result.failed} failed`);
+    console.log(`[Pipeline] Completed: ${result.processed} processed, ${result.failed} failed`);
   } catch (error) {
-    console.error('[Scheduler] Pipeline error:', error);
+    console.error('[Pipeline] Error:', error);
     await setConfig('last_run_status', 'error');
     await setConfig('last_run_error', String(error));
-  } finally {
-    isRunning = false;
   }
-}
-
-export function stopScheduler(): void {
-  console.log('[Scheduler] Stop requested — use Vercel dashboard to disable Cron Jobs');
-}
-
-export function restartScheduler(): void {
-  startScheduler();
-}
-
-export async function getSchedulerStatus(): Promise<{
-  running: boolean;
-  cronExpression: string | undefined;
-  pipelineRunning: boolean;
-  lastRun: string | undefined;
-  lastRunStatus: string | undefined;
-  nextRun: string | undefined;
-  scheduleDescription: string;
-}> {
-  const cronExpression = await getConfig('schedule_cron') || '0 8 * * *';
-  const timezone = await getConfig('schedule_timezone') || 'Asia/Jakarta';
-
-  let nextRun: string | undefined;
-  try {
-    nextRun = getNextCronTime(cronExpression, new Date(), timezone).toISOString();
-  } catch {
-    nextRun = undefined;
-  }
-
-  return {
-    running: true,
-    cronExpression,
-    pipelineRunning: isRunning,
-    lastRun: await getConfig('last_run'),
-    lastRunStatus: await getConfig('last_run_status'),
-    nextRun,
-    scheduleDescription: describeCron(cronExpression),
-  };
 }

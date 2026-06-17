@@ -167,6 +167,14 @@ export async function sendTextToImageChat(text: string): Promise<boolean> {
   return sendText('telegram_image_bot_token', 'telegram_image_chat_id', text);
 }
 
+/**
+ * Sends a text message to the Telegram input chat.
+ * Used for feedback when a photo is received.
+ */
+export async function sendTextToInputChat(text: string): Promise<boolean> {
+  return sendText('telegram_input_bot_token', 'telegram_input_chat_id', text);
+}
+
 // ── Confirmation prompt ───────────────────────────────────────────────────
 
 /**
@@ -552,16 +560,17 @@ async function handleUlang(
       // Image-to-Image: re-enhance the original image
       const originalImageUrl = await getFileReadUrl(job.source_file_id);
       const enhancePrompt = await getConfig('default_image_to_image_prompt') || 'Enhance this image, improve quality, add cinematic lighting';
+      const imageModel = await getConfig('image_model') || 'nano-banana-2';
       const imageAspectRatio = await getConfig('image_aspect_ratio') || 'auto';
       const imageResolution = await getConfig('image_resolution') || '1K';
       const imageOutputFormat = await getConfig('image_output_format') || 'jpg';
 
-      console.log(`[Telegram] Re-enhancing original image for job ${job.id}`);
+      console.log(`[Telegram] Re-enhancing original image for job ${job.id} (model: ${imageModel})`);
 
       const newImageTaskId = await enhanceImage({
         imageUrl: originalImageUrl,
         prompt: enhancePrompt,
-        model: 'nano-banana-2',
+        model: imageModel,
         aspectRatio: imageAspectRatio,
         resolution: imageResolution,
         outputFormat: imageOutputFormat,

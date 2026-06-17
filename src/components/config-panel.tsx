@@ -19,23 +19,18 @@ export default function ConfigPanel() {
 
   const [form, setForm] = useState({
     kie_api_key: '',
-    pipeline_mode: 'image-to-image',
+    image_model: 'nano-banana-2',
     google_client_id: '',
     google_client_secret: '',
     drive_input_folder: '',
     drive_image_output_folder: '',
     drive_dest_folder: '',
     default_image_to_image_prompt: 'Enhance this image, improve quality, add cinematic lighting and detail',
-    default_image_prompt: 'A beautiful cinematic scene, high quality, photorealistic',
-    image_count: '1',
     image_resolution: '1K',
     image_aspect_ratio: 'auto',
     image_output_format: 'jpg',
-    text_image_resolution: '1024x1024',
     default_prompt: '',
     default_duration: '10',
-    schedule_cron: '0 8 * * *',
-    schedule_timezone: 'Asia/Jakarta',
     telegram_image_bot_token: '',
     telegram_image_chat_id: '',
     telegram_video_bot_token: '',
@@ -247,79 +242,58 @@ export default function ConfigPanel() {
 
       {/* Image Pipeline */}
       <div className="space-y-4">
-        <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Image Pipeline</h3>
+        <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Image Pipeline (Image-to-Image)</h3>
 
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Pipeline Mode</label>
-          <select value={form.pipeline_mode} onChange={(e) => updateField('pipeline_mode', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
-            <option value="image-to-image">Image-to-Image — enhance input images</option>
-            <option value="text-to-image">Text-to-Image — generate from prompt</option>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Model</label>
+          <select value={form.image_model} onChange={(e) => updateField('image_model', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
+            <option value="nano-banana-2">nano-banana-2</option>
+            <option value="gpt-image-2-image-to-image">GPT Image 2 (1K / 9:16)</option>
           </select>
+          {form.image_model === 'gpt-image-2-image-to-image' && (
+            <p className="text-xs text-zinc-400 mt-1">GPT Image 2: resolution fixed at 1K, aspect ratio fixed at 9:16.</p>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            {form.pipeline_mode === 'image-to-image' ? 'Enhancement Prompt' : 'Image Prompt'}
-          </label>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Enhancement Prompt</label>
           <textarea
-            value={form.pipeline_mode === 'image-to-image' ? form.default_image_to_image_prompt : form.default_image_prompt}
-            onChange={(e) => {
-              if (form.pipeline_mode === 'image-to-image') updateField('default_image_to_image_prompt', e.target.value);
-              else updateField('default_image_prompt', e.target.value);
-            }}
+            value={form.default_image_to_image_prompt}
+            onChange={(e) => updateField('default_image_to_image_prompt', e.target.value)}
             rows={3}
             className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
           />
         </div>
 
-        {form.pipeline_mode === 'image-to-image' && (
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Aspect Ratio</label>
-              <select value={form.image_aspect_ratio} onChange={(e) => updateField('image_aspect_ratio', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
-                <option value="auto">Auto</option>
-                <option value="1:1">1:1</option>
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-                <option value="4:3">4:3</option>
-                <option value="3:4">3:4</option>
-                <option value="21:9">21:9</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Resolution</label>
-              <select value={form.image_resolution} onChange={(e) => updateField('image_resolution', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
-                <option value="1K">1K</option>
-                <option value="2K">2K</option>
-                <option value="4K">4K</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Format</label>
-              <select value={form.image_output_format} onChange={(e) => updateField('image_output_format', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
-                <option value="jpg">JPG</option>
-                <option value="png">PNG</option>
-              </select>
-            </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Aspect Ratio</label>
+            <select value={form.image_aspect_ratio} onChange={(e) => updateField('image_aspect_ratio', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" disabled={form.image_model === 'gpt-image-2-image-to-image'}>
+              <option value="auto">Auto</option>
+              <option value="1:1">1:1</option>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="21:9">21:9</option>
+            </select>
           </div>
-        )}
-
-        {form.pipeline_mode === 'text-to-image' && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Number of Images</label>
-              <input type="number" min="1" max="10" step="1" value={form.image_count} onChange={(e) => updateField('image_count', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Resolution</label>
-              <select value={form.text_image_resolution} onChange={(e) => updateField('text_image_resolution', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm">
-                <option value="1024x1024">1024x1024</option>
-                <option value="1792x1024">1792x1024</option>
-                <option value="1024x1792">1024x1792</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Resolution</label>
+            <select value={form.image_resolution} onChange={(e) => updateField('image_resolution', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" disabled={form.image_model === 'gpt-image-2-image-to-image'}>
+              <option value="1K">1K</option>
+              <option value="2K">2K</option>
+              <option value="4K">4K</option>
+            </select>
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Format</label>
+            <select value={form.image_output_format} onChange={(e) => updateField('image_output_format', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" disabled={form.image_model === 'gpt-image-2-image-to-image'}>
+              <option value="jpg">JPG</option>
+              <option value="png">PNG</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Video Generation */}
@@ -381,20 +355,6 @@ export default function ConfigPanel() {
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Chat ID</label>
             <input type="text" value={form.telegram_input_chat_id} onChange={(e) => updateField('telegram_input_chat_id', e.target.value)} placeholder="-100123456789 or @channelusername" className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
           </div>
-        </div>
-      </div>
-
-      {/* Schedule */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium text-zinc-500 uppercase tracking-wider">Schedule</h3>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cron Expression</label>
-          <input type="text" value={form.schedule_cron} onChange={(e) => updateField('schedule_cron', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono" />
-          <p className="text-xs text-zinc-400 mt-1">Default: 0 8 * * * (daily at 8:00 AM)</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Timezone</label>
-          <input type="text" value={form.schedule_timezone} onChange={(e) => updateField('schedule_timezone', e.target.value)} placeholder="Asia/Jakarta" className="w-full px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
         </div>
       </div>
 
