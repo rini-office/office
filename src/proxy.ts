@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/webhook/kie'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/webhook/kie', '/api/webhook/telegram', '/api/telegram/setup-webhook'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
