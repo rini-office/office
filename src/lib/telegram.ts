@@ -1,6 +1,6 @@
 import { getConfig, getJob, updateJob, getDb, setConfig } from './db';
 import { createImageToVideoTask, enhanceImage, generateImage } from './kie';
-import { getFileUrl } from './drive';
+import { getFileUrl, getFileReadUrl } from './drive';
 
 /**
  * Sends a file to a Telegram bot via the Bot API.
@@ -495,7 +495,7 @@ async function handleUlang(
 
     if (job.source_file_id) {
       // Image-to-Image: re-enhance the original image
-      const originalImageUrl = await getFileUrl(job.source_file_id);
+      const originalImageUrl = await getFileReadUrl(job.source_file_id);
       const enhancePrompt = await getConfig('default_image_to_image_prompt') || 'Enhance this image, improve quality, add cinematic lighting';
       const imageAspectRatio = await getConfig('image_aspect_ratio') || 'auto';
       const imageResolution = await getConfig('image_resolution') || '1K';

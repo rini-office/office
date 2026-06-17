@@ -156,3 +156,26 @@ export async function getFileUrl(fileId: string): Promise<string> {
 
   return `https://drive.google.com/uc?export=download&id=${fileId}`;
 }
+
+/**
+ * Gets a readable URL for a Drive file WITHOUT modifying its permissions.
+ * Use when the app doesn't own the file (e.g. reading original input files
+ * for "ulang" re-processing). Read-only — no write access required.
+ */
+export async function getFileReadUrl(fileId: string): Promise<string> {
+  const auth = await getOAuth2Client();
+  const drive = google.drive({ version: 'v3', auth });
+
+  // Try webContentLink first (no permission change needed)
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'webContentLink',
+  });
+
+  if (meta.data.webContentLink) {
+    return meta.data.webContentLink;
+  }
+
+  // Fallback: direct download URL (works if file is shared with the authenticated user)
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+}
