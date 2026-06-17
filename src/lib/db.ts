@@ -35,6 +35,7 @@ async function initializeSchema(): Promise<void> {
       duration INTEGER DEFAULT 8,
       resolution TEXT DEFAULT '1080p',
       error TEXT,
+      retry_count INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       completed_at TEXT
@@ -67,6 +68,7 @@ async function migrateSchema(p: Pool): Promise<void> {
     { col: 'image_prompt', def: 'TEXT' },
     { col: 'image_output_file_id', def: 'TEXT' },
     { col: 'image_gen_task_id', def: 'TEXT' },
+    { col: 'retry_count', def: 'INTEGER DEFAULT 0' },
   ];
 
   for (const { col, def } of migrations) {
@@ -119,6 +121,7 @@ export interface Job {
   duration: number;
   resolution: string;
   error: string | null;
+  retry_count: number;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -126,18 +129,18 @@ export interface Job {
 
 // ── Job CRUD ──────────────────────────────────────────────────────────────
 
-export async function createJob(job: Omit<Job, 'created_at' | 'updated_at' | 'completed_at'>): Promise<Job> {
+export async function createJob(job: Omit<Job, 'created_at' | 'updated_at' | 'completed_at' | 'retry_count'> & { retry_count?: number }): Promise<Job> {
   await ensureSchema();
   const now = new Date().toISOString();
   const p = getPool();
   await p.query(
-    `INSERT INTO jobs (id, source_file_name, source_file_id, status, kie_task_id, output_url, output_file_id, image_prompt, image_output_file_id, image_gen_task_id, duration, resolution, error, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    `INSERT INTO jobs (id, source_file_name, source_file_id, status, kie_task_id, output_url, output_file_id, image_prompt, image_output_file_id, image_gen_task_id, duration, resolution, error, retry_count, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [
       job.id, job.source_file_name, job.source_file_id, job.status,
       job.kie_task_id, job.output_url, job.output_file_id, job.image_prompt,
       job.image_output_file_id, job.image_gen_task_id, job.duration,
-      job.resolution, job.error, now, now,
+      job.resolution, job.error, job.retry_count ?? 0, now, now,
     ]
   );
   return (await getJob(job.id))!;
@@ -152,7 +155,7 @@ export async function getJob(id: string): Promise<Job | undefined> {
 
 export async function updateJob(
   id: string,
-  updates: Partial<Pick<Job, 'status' | 'source_file_id' | 'source_file_name' | 'kie_task_id' | 'output_url' | 'output_file_id' | 'image_prompt' | 'image_output_file_id' | 'image_gen_task_id' | 'error' | 'completed_at'>>
+  updates: Partial<Pick<Job, 'status' | 'source_file_id' | 'source_file_name' | 'kie_task_id' | 'output_url' | 'output_file_id' | 'image_prompt' | 'image_output_file_id' | 'image_gen_task_id' | 'error' | 'retry_count' | 'completed_at'>>
 ): Promise<void> {
   await ensureSchema();
   const p = getPool();
@@ -216,6 +219,36 @@ export async function getJobStats(): Promise<{
     failed: parseInt(r.failed),
     processing_image: parseInt(r.processing_image),
     processing_video: parseInt(r.processing_video),
+  };
+}
+
+export async function getRetryStats(): Promise<{
+  total_retries: number;
+  retried_jobs: number;
+  avg_retries: number;
+  max_retries: number;
+}> {
+  await ensureSchema();
+  const p = getPool();
+  const { rows } = await p.query<{
+    total_retries: string;
+    retried_jobs: string;
+    avg_retries: string;
+    max_retries: string;
+  }>(
+    `SELECT
+       COALESCE(SUM(retry_count), 0) as total_retries,
+       COALESCE(SUM(CASE WHEN retry_count > 0 THEN 1 ELSE 0 END), 0) as retried_jobs,
+       COALESCE(ROUND(AVG(retry_count)::numeric, 1), 0) as avg_retries,
+       COALESCE(MAX(retry_count), 0) as max_retries
+     FROM jobs`
+  );
+  const r = rows[0];
+  return {
+    total_retries: parseInt(r.total_retries),
+    retried_jobs: parseInt(r.retried_jobs),
+    avg_retries: parseFloat(r.avg_retries),
+    max_retries: parseInt(r.max_retries),
   };
 }
 

@@ -553,6 +553,9 @@ async function handleUlang(
 ): Promise<{ success: boolean; error?: string }> {
   await sendTextToImageChat('🔄 Mengulang gambar...').catch(() => {});
 
+  // Track retry count
+  const newRetryCount = (job.retry_count || 0) + 1;
+
   try {
     const callbackUrl = getCallbackUrl();
 
@@ -585,6 +588,7 @@ async function handleUlang(
         output_url: null,
         output_file_id: null,
         image_output_file_id: null,
+        retry_count: newRetryCount,
       });
 
       console.log(`[Telegram] Image re-enhancement submitted: ${newImageTaskId}`);
@@ -611,6 +615,7 @@ async function handleUlang(
         output_url: null,
         output_file_id: null,
         image_output_file_id: null,
+        retry_count: newRetryCount,
       });
 
       console.log(`[Telegram] Image re-generation submitted: ${newImageTaskId}`);

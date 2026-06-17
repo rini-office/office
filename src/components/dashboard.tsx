@@ -12,40 +12,18 @@ interface Stats {
   processing_video: number;
 }
 
-interface SchedulerInfo {
-  running: boolean;
-  cronExpression: string;
-  pipelineRunning: boolean;
-  lastRun: string;
-  lastRunStatus: string;
-  nextRun?: string;
-  scheduleDescription?: string;
-}
-
-function formatCountdown(targetIso: string): string {
-  const target = new Date(targetIso).getTime();
-  const now = Date.now();
-  const diff = target - now;
-
-  if (diff <= 0) return 'running...';
-
-  const hours = Math.floor(diff / 3600000);
-  const minutes = Math.floor((diff % 3600000) / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-  return `${seconds}s`;
+interface RetryStats {
+  total_retries: number;
+  retried_jobs: number;
+  avg_retries: number;
+  max_retries: number;
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({ total: 0, completed: 0, failed: 0, processing_image: 0, processing_video: 0 });
-  const [scheduler, setScheduler] = useState<SchedulerInfo | null>(null);
-  const [countdown, setCountdown] = useState('');
+  const [retryStats, setRetryStats] = useState<RetryStats | null>(null);
+  const [lastRun, setLastRun] = useState<string | null>(null);
+  const [lastRunStatus, setLastRunStatus] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
@@ -55,7 +33,9 @@ export default function Dashboard() {
       const res = await fetch('/api/pipeline/status');
       const data = await res.json();
       if (data.stats) setStats(data.stats);
-      if (data.scheduler) setScheduler(data.scheduler);
+      if (data.retryStats) setRetryStats(data.retryStats);
+      if (data.lastRun) setLastRun(data.lastRun);
+      if (data.lastRunStatus) setLastRunStatus(data.lastRunStatus);
     } catch (err) {
       console.error('Failed to load status:', err);
     }
@@ -66,18 +46,6 @@ export default function Dashboard() {
     const interval = setInterval(fetchStatus, 10000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
-
-  // Live countdown every second
-  useEffect(() => {
-    if (!scheduler?.nextRun) {
-      setCountdown('');
-      return;
-    }
-    const tick = () => setCountdown(formatCountdown(scheduler.nextRun!));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [scheduler?.nextRun]);
 
   const handleTrigger = async () => {
     setTriggering(true);
@@ -100,10 +68,14 @@ export default function Dashboard() {
     }
   };
 
-  const formatTime = (iso?: string) => {
+  const formatTime = (iso?: string | null) => {
     if (!iso) return 'Never';
     return new Date(iso).toLocaleString();
   };
+
+  const errorRate = stats.total > 0
+    ? ((retryStats?.retried_jobs || 0) / stats.total * 100).toFixed(1)
+    : '0.0';
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -115,7 +87,7 @@ export default function Dashboard() {
               Video Pipeline
             </h1>
             <p className="text-sm text-zinc-500">
-              Generate &amp; enhance images, then turn them into videos — all via KIE AI &amp; Google Drive
+              Image-to-Image via KIE AI &amp; Telegram
             </p>
           </div>
           <div className="flex gap-2">
@@ -156,7 +128,7 @@ export default function Dashboard() {
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         {activeTab === 'dashboard' ? (
           <>
-            {/* Stats Cards */}
+            {/* Job Stats */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
                 <p className="text-sm text-zinc-400 mb-2">Total Jobs</p>
@@ -180,72 +152,78 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Retry / Error Rate Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-amber-200 dark:border-amber-800 p-5">
+                <p className="text-sm text-zinc-400 mb-2">Error Rate</p>
+                <p className="text-3xl font-bold text-amber-600">{errorRate}%</p>
+                <p className="text-xs text-zinc-400 mt-1">jobs needing retry</p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-orange-200 dark:border-orange-800 p-5">
+                <p className="text-sm text-zinc-400 mb-2">Total Retries</p>
+                <p className="text-3xl font-bold text-orange-600">{retryStats?.total_retries ?? 0}</p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+                <p className="text-sm text-zinc-400 mb-2">Jobs Retried</p>
+                <p className="text-3xl font-bold text-zinc-700 dark:text-zinc-300">{retryStats?.retried_jobs ?? 0}</p>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+                <p className="text-sm text-zinc-400 mb-2">Avg Retries</p>
+                <p className="text-3xl font-bold text-zinc-700 dark:text-zinc-300">{retryStats?.avg_retries ?? 0}</p>
+                <p className="text-xs text-zinc-400 mt-1">max: {retryStats?.max_retries ?? 0}</p>
+              </div>
+            </div>
+
             {/* Pipeline Control */}
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
                     Pipeline Control
                   </h2>
                   <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
                     <span>
-                      Schedule:{' '}
-                      <code className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-xs font-mono">
-                        {scheduler?.cronExpression || 'Not configured'}
-                      </code>
+                      Triggered via Telegram input
                     </span>
-                    {scheduler?.scheduleDescription && (
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {scheduler.scheduleDescription}
-                      </span>
-                    )}
                     <span>
                       Last run:{' '}
-                      {formatTime(scheduler?.lastRun)}
+                      {formatTime(lastRun)}
                     </span>
+                    {lastRunStatus && (
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        lastRunStatus === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                        lastRunStatus === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                        'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
+                        {lastRunStatus}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleTrigger}
-                    disabled={triggering}
-                    className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-                  >
-                    {triggering ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Running...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Run Pipeline Now
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={handleTrigger}
+                  disabled={triggering}
+                  className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                >
+                  {triggering ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Run Pipeline Now
+                    </>
+                  )}
+                </button>
               </div>
-
-              {/* Countdown to next cron run */}
-              {scheduler?.nextRun && (
-                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Next auto-run:{' '}
-                    <span className="font-semibold">
-                      {new Date(scheduler.nextRun).toLocaleString()}
-                    </span>
-                  </p>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1 tabular-nums tracking-tight">
-                    {countdown}
-                  </p>
-                </div>
-              )}
 
               {pipelineStatus && (
                 <div className={`mt-4 p-3 rounded-lg text-sm ${
