@@ -459,8 +459,11 @@ async function handleIya(
   if (!job.image_output_file_id) {
     const err = 'No enhanced image found — cannot create video';
     await updateJob(job.id, { status: 'failed', error: err, completed_at: new Date().toISOString() });
+    await sendTextToImageChat(`❌ Gagal: ${err}`).catch(() => {});
     return { success: false, error: err };
   }
+
+  await sendTextToImageChat('⏳ Membuat video...').catch(() => {});
 
   try {
     const driveImageUrl = await getFileUrl(job.image_output_file_id);
@@ -479,10 +482,13 @@ async function handleIya(
 
     await updateJob(job.id, { kie_task_id: videoTaskId, status: 'processing_video' });
     console.log(`[Telegram] Video task created: ${videoTaskId} for job ${job.id}`);
+
+    await sendTextToImageChat('✅ Video sedang dibuat, tunggu sebentar...').catch(() => {});
     return { success: true };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await updateJob(job.id, { status: 'failed', error: errorMsg, completed_at: new Date().toISOString() });
+    await sendTextToImageChat(`❌ Gagal membuat video: ${errorMsg}`).catch(() => {});
     return { success: false, error: errorMsg };
   }
 }
@@ -490,6 +496,8 @@ async function handleIya(
 async function handleUlang(
   job: NonNullable<Awaited<ReturnType<typeof getJob>>>
 ): Promise<{ success: boolean; error?: string }> {
+  await sendTextToImageChat('🔄 Mengulang gambar...').catch(() => {});
+
   try {
     const callbackUrl = getCallbackUrl();
 
@@ -552,10 +560,12 @@ async function handleUlang(
       console.log(`[Telegram] Image re-generation submitted: ${newImageTaskId}`);
     }
 
+    await sendTextToImageChat('✅ Gambar sedang dibuat ulang, tunggu sebentar...').catch(() => {});
     return { success: true };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await updateJob(job.id, { status: 'failed', error: errorMsg, completed_at: new Date().toISOString() });
+    await sendTextToImageChat(`❌ Gagal mengulang gambar: ${errorMsg}`).catch(() => {});
     return { success: false, error: errorMsg };
   }
 }

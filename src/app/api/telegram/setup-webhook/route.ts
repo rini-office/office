@@ -4,17 +4,49 @@ import { setTelegramWebhook, deleteTelegramWebhook, getTelegramWebhookInfo } fro
 export const runtime = 'nodejs';
 
 /**
- * GET  — show current webhook status
- * POST — register webhook with Telegram  
- * DELETE — remove webhook
+ * GET  ?action=register → register webhook
+ * GET  (no param)       → show current webhook status
+ * POST                  → register webhook
+ * DELETE                → remove webhook
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const action = request.nextUrl.searchParams.get('action');
+
+  // One-click register from browser
+  if (action === 'register') {
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const webhookUrl = `${appUrl}/api/webhook/telegram`;
+      const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+
+      if (appUrl.includes('localhost')) {
+        return NextResponse.json({ error: 'Cannot register webhook on localhost. Deploy to Vercel first.' }, { status: 400 });
+      }
+
+      const success = await setTelegramWebhook(webhookUrl, webhookSecret);
+      const info = await getTelegramWebhookInfo();
+
+      return NextResponse.json({
+        success,
+        webhookUrl,
+        message: success
+          ? '✅ Webhook registered! Telegram will send updates here.'
+          : '❌ Failed to set webhook. Check telegram_image_bot_token.',
+        info,
+      });
+    } catch (err) {
+      return NextResponse.json({ error: String(err) }, { status: 500 });
+    }
+  }
+
+  // Default: show status
   try {
     const info = await getTelegramWebhookInfo();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     return NextResponse.json({
       webhookUrl: `${appUrl}/api/webhook/telegram`,
       info,
+      tip: 'Add ?action=register to this URL to set up the webhook.',
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
