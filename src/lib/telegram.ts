@@ -274,7 +274,7 @@ export async function setTelegramWebhook(
       body: JSON.stringify({
         url: webhookUrl,
         secret_token: secretToken,
-        allowed_updates: ['message', 'callback_query'],
+        allowed_updates: ['callback_query'],
       }),
     });
     const result: TelegramResult = await response.json();
