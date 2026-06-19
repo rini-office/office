@@ -27,6 +27,7 @@ async function sendToTelegram(
    buffer: Buffer,
    fileName: string,
    caption?: string,
+   timeoutMs = 60_000,
 ): Promise<boolean> {
    const token = await getConfig(botTokenKey);
    const chatId = await getConfig(chatIdKey);
@@ -57,10 +58,27 @@ async function sendToTelegram(
       formData.append('caption', caption);
    }
 
-   // No AbortController — Node.js undici has a known deadlock with
-   // AbortSignal + FormData streams. TCP keepalive handles hung connections naturally.
+   // Timeout via Promise.race — avoids Vercel 300s serverless timeout killing
+   // the entire function before the Drive-link fallback can execute.
+   // AbortController is not used because Node.js undici has a known deadlock
+   // with AbortSignal + FormData streams.
+   //
+   // TODO: switch to AbortController + AbortSignal.timeout() when undici's
+   // FormData+AbortSignal deadlock is resolved. AbortController properly
+   // tears down the TCP connection; Promise.race only orphans the fetch.
+   const safeTimeout = Math.max(1, Math.min(timeoutMs, 2_147_483_647));
+
+   const fetchPromise = fetch(url, { method: 'POST', body: formData });
+   fetchPromise.catch(() => {}); // suppress unhandled rejection if timeout wins
+
    try {
-      const response = await fetch(url, { method: 'POST', body: formData });
+      const response = await Promise.race([
+         fetchPromise,
+         new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Telegram ${method} timed out after ${safeTimeout / 1000}s`)), safeTimeout),
+         ),
+      ]);
+
       const result: TelegramResult = await response.json();
 
       if (!result.ok) {
@@ -72,7 +90,11 @@ async function sendToTelegram(
       return true;
    } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Telegram] ${method} network error for ${fileName}:`, msg);
+      if (msg.includes('timed out')) {
+         console.warn(`[Telegram] ${method} timed out for ${fileName}:`, msg);
+      } else {
+         console.error(`[Telegram] ${method} network error for ${fileName}:`, msg);
+      }
       return false;
    }
 }
