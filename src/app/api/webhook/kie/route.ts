@@ -3,7 +3,7 @@ import { updateJob, markFileProcessed } from '@/lib/db';
 import { downloadVideo, downloadImage, verifyWebhookSignature } from '@/lib/kie';
 import { uploadFile } from '@/lib/drive';
 import { getConfig, getDb } from '@/lib/db';
-import { sendImageToTelegram, sendVideoToTelegram, sendTextToImageChat, sendTextToVideoChat, sendConfirmationPrompt } from '@/lib/telegram';
+import { sendImageToTelegram, sendVideoToTelegram, sendTextToImageChat, sendTextToVideoChat, sendConfirmationPrompt, sendRetryPrompt } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -184,12 +184,19 @@ async function handleVideoCompletion(
 
   // Failure
   if (state === 'fail' || (body.data as Record<string, unknown> | undefined)?.failMsg) {
+    const errorMsg = ((body.data as Record<string, unknown> | undefined)?.failMsg as string) || 'Video generation failed';
+
     await updateJob(job.id, {
       status: 'failed',
-      error: ((body.data as Record<string, unknown> | undefined)?.failMsg as string) || 'Video generation failed',
+      error: errorMsg,
       completed_at: new Date().toISOString(),
     });
     console.log(`[Webhook] Video task failed for job ${job.id}`);
+
+    // Send retry prompt to image chat so user can retry with one tap
+    await sendRetryPrompt(job.id, job.source_file_name, errorMsg).catch((err) => {
+      console.error(`[Webhook] Failed to send retry prompt for job ${job.id}:`, err);
+    });
   }
 }
 

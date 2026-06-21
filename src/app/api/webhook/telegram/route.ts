@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { extractJobId, processConfirmationJob, answerCallbackQuery } from '@/lib/telegram';
+import { extractJobId, processConfirmationJob, answerCallbackQuery, handleRetryVideo } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +40,17 @@ function parseCallbackData(data: string): { jobId: string; action: 'iya' | 'ulan
   return null;
 }
 
+/**
+ * Parses callback_data format: "retry_video:{jobId}"
+ */
+function parseRetryCallbackData(data: string): string | null {
+  const parts = data.split(':');
+  if (parts.length === 2 && parts[0] === 'retry_video') {
+    return parts[1];
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   // ── Verify secret token ──
   const secretHeader = request.headers.get('x-telegram-bot-api-secret-token');
@@ -68,8 +79,25 @@ export async function POST(request: NextRequest) {
 
 async function handleCallbackQuery(body: TelegramUpdate) {
   const cq = body.callback_query!;
-  const parsed = parseCallbackData(cq.data!);
 
+  // ── Retry video callback ──
+  const retryJobId = parseRetryCallbackData(cq.data!);
+  if (retryJobId) {
+    console.log(`[TelegramWebhook] Retry video callback: job=${retryJobId}`);
+    await answerCallbackQuery(cq.id, 'Mencoba membuat video ulang...');
+
+    const res = await handleRetryVideo(retryJobId);
+
+    return NextResponse.json({
+      ok: true,
+      method: 'callback_retry',
+      processed: res.success,
+      error: res.error,
+    });
+  }
+
+  // ── Confirm callback ──
+  const parsed = parseCallbackData(cq.data!);
   if (!parsed) {
     await answerCallbackQuery(cq.id);
     return NextResponse.json({ ok: true, note: 'invalid callback data' });

@@ -1,6 +1,6 @@
 import { getConfig, getJob, updateJob, getDb, setConfig } from './db';
 import { createImageToVideoTask, enhanceImage, generateImage } from './kie';
-import { getFileUrl, getFileReadUrl } from './drive';
+import { getFileUrl, getFileReadUrl, AUTH_EXPIRED_MESSAGE } from './drive';
 
 /**
  * Sends a file to a Telegram bot via the Bot API.
@@ -718,4 +718,125 @@ export async function processTelegramConfirmations(): Promise<{
   }
 
   return result;
+}
+
+// ── Video retry (on failure) ──────────────────────────────────────────────
+
+/**
+ * Sends a retry prompt to the image chat when video generation fails.
+ * Includes an inline "Coba lagi" button that triggers a retry via callback.
+ */
+export async function sendRetryPrompt(
+  jobId: string,
+  fileName: string,
+  error: string,
+): Promise<number | null> {
+  const token = await getConfig('telegram_image_bot_token');
+  const chatId = await getConfig('telegram_image_chat_id');
+
+  if (!token || !chatId) return null;
+
+  const errorShort = error.length > 200 ? error.substring(0, 197) + '...' : error;
+  const text = `❌ Pembuatan video gagal: ${fileName}\n\nError: ${errorShort}\n\nKlik tombol di bawah untuk coba lagi.`;
+
+  const url = `${TELEGRAM_API_BASE}/bot${token}/sendMessage`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🔄 Coba lagi', callback_data: `retry_video:${jobId}` },
+            ],
+          ],
+        },
+      }),
+    });
+    const result: TelegramResult = await response.json();
+
+    if (result.ok && result.result && typeof result.result === 'object') {
+      const msgId = (result.result as { message_id: number }).message_id;
+      console.log(`[Telegram] Retry prompt sent: message_id=${msgId} for job ${jobId}`);
+      return msgId;
+    }
+
+    console.error('[Telegram] Failed to send retry prompt:', result.description);
+    return null;
+  } catch (err) {
+    console.error('[Telegram] Retry prompt network error:', err);
+    return null;
+  }
+}
+
+/**
+ * Handles a retry-video callback: re-submits the video generation task
+ * for a failed job. Async — the webhook will handle the result.
+ */
+export async function handleRetryVideo(
+  jobId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const job = await getJob(jobId);
+  if (!job) {
+    await sendTextToImageChat('❌ Job tidak ditemukan.').catch(() => {});
+    return { success: false, error: 'Job not found' };
+  }
+
+  if (job.status !== 'failed') {
+    await sendTextToImageChat(`❌ Job ${jobId} tidak dalam status failed (status: ${job.status}).`).catch(() => {});
+    return { success: false, error: `Job is not failed (status: ${job.status})` };
+  }
+
+  if (!job.image_output_file_id) {
+    const err = 'Tidak ada gambar hasil enhance — tidak bisa membuat video ulang';
+    await sendTextToImageChat(`❌ ${err}`).catch(() => {});
+    return { success: false, error: err };
+  }
+
+  await sendTextToImageChat('⏳ Mencoba membuat video ulang...').catch(() => {});
+
+  try {
+    const driveImageUrl = await getFileUrl(job.image_output_file_id);
+    const defaultPrompt = await getConfig('default_prompt') || undefined;
+    const defaultDuration = parseInt(await getConfig('default_duration') || '10', 10);
+    const callbackUrl = getCallbackUrl();
+
+    const videoTaskId = await createImageToVideoTask({
+      imageUrl: driveImageUrl,
+      prompt: defaultPrompt,
+      duration: defaultDuration,
+      model: 'grok-imagine/image-to-video',
+      resolution: '720p',
+      callBackUrl: callbackUrl,
+    });
+
+    await updateJob(job.id, {
+      kie_task_id: videoTaskId,
+      status: 'processing_video',
+      error: null,
+      completed_at: null,
+      retry_count: (job.retry_count || 0) + 1,
+    });
+
+    console.log(`[Telegram] Retry video task created: ${videoTaskId} for job ${job.id}`);
+    await sendTextToImageChat('✅ Video sedang dibuat ulang, tunggu sebentar...').catch(() => {});
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    await updateJob(job.id, { status: 'failed', error: errorMsg, completed_at: new Date().toISOString() });
+
+    if (errorMsg.includes(AUTH_EXPIRED_MESSAGE)) {
+      await sendTextToImageChat(
+        '❌ Google Drive tidak terhubung (token expired/revoked).\n\n' +
+        'Silakan buka web dashboard → Settings → klik "Connect Google Drive" untuk autentikasi ulang.'
+      ).catch(() => {});
+    } else {
+      await sendTextToImageChat(`❌ Gagal membuat video ulang: ${errorMsg}`).catch(() => {});
+    }
+    return { success: false, error: errorMsg };
+  }
 }
